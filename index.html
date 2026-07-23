@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TripMate</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234F6F52'/%3E%3Crect x='16' y='24' width='32' height='24' rx='5' fill='%23F5F1E6'/%3E%3Cpath d='M25 24v-6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v6' fill='none' stroke='%23F5F1E6' stroke-width='3'/%3E%3Cpath d='M32 33c-4-4-10-1-7.4 4 1.6 2.4 5 5 7.4 6.6 2.4-1.6 5.8-4.2 7.4-6.6C42 32 36 29 32 33z' fill='%234F6F52'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234F6F52'/%3E%3Crect x='16' y='24' width='32' height='24' rx='5' fill='%23F5F1E6'/%3E%3Cpath d='M25 24v-6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v6' fill='none' stroke='%23F5F1E6' stroke-width='3'/%3E%3Cpath d='M32 33c-4-4-10-1-7.4 4 1.6 2.4 5 5 7.4 6.6 2.4-1.6 5.8-4.2 7.4-6.6C42 32 36 29 32 33z' fill='%234F6F52'/%3E%3C/svg%3E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TripMate">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#4F6F52">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:wght@600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -547,6 +554,55 @@ function defaultMutable(){
   return { checked:{}, notes:{}, packing: DEFAULT_PACKING.map(p=>({...p})), expenses: [], exchangeRate: 0.109, confirmed:{}, category:{}, timeOverride:{}, dayOrder:{}, itemEdits:{}, deletedItems:{}, customItems: [], itemDetails:{}, shopping: [] };
 }
 
+// ---------------- StorageService ----------------
+// 永続化層を差し替え可能にするための共通インターフェース。
+// 今はlocalStorageで実装(LocalStorageService)。
+// 将来、複数端末・複数ブラウザ間でリアルタイム同期したくなったら、
+// 同じインターフェース(get/set/remove/onChange)を持つ SupabaseStorageService を
+// 作って下の `const storageService = ...` の1行を差し替えるだけで移行できる設計です。
+//
+// SupabaseStorageService実装時のイメージ:
+//   get(key)    -> Supabaseのテーブルからkeyで1行取得してvalueを返す
+//   set(key,v)  -> upsertでkey行を更新
+//   remove(key) -> delete
+//   onChange(key, cb) -> supabase.channel(...).on('postgres_changes', ...) で購読し、
+//                        他端末からの変更をcbに流す。unsubscribe関数を返す
+class LocalStorageService{
+  async get(key){
+    try{
+      return localStorage.getItem(key);
+    }catch(err){
+      console.error('StorageService.get failed:', key, err);
+      return null;
+    }
+  }
+  async set(key, value){
+    try{
+      localStorage.setItem(key, value);
+      return true;
+    }catch(err){
+      console.error('StorageService.set failed:', key, err);
+      return false;
+    }
+  }
+  async remove(key){
+    try{
+      localStorage.removeItem(key);
+      return true;
+    }catch(err){
+      console.error('StorageService.remove failed:', key, err);
+      return false;
+    }
+  }
+  // ローカル実装では他端末の変更を検知できないため何もしない。
+  // SupabaseStorageServiceではRealtime購読に差し替える。
+  onChange(key, callback){
+    return function unsubscribe(){};
+  }
+}
+
+const storageService = new LocalStorageService();
+
 let TRIP_MUTABLES = {};
 let activeTripId = null;
 let appPhase = 'splash';
@@ -597,9 +653,10 @@ async function activateTrip(tripId){
   ITEMS = TRIP_SEED_ITEMS[tripId] || [];
   if(!TRIP_MUTABLES[tripId]){
     try{
-      const result = await window.storage.get('tripmate-trip-'+tripId, true);
-      TRIP_MUTABLES[tripId] = (result && result.value) ? Object.assign(defaultMutable(), JSON.parse(result.value)) : defaultMutable();
+      const raw = await storageService.get('tripmate-trip-'+tripId);
+      TRIP_MUTABLES[tripId] = raw ? Object.assign(defaultMutable(), JSON.parse(raw)) : defaultMutable();
     }catch(err){
+      console.error('trip load failed', err);
       TRIP_MUTABLES[tripId] = defaultMutable();
     }
   }
@@ -1965,22 +2022,9 @@ document.getElementById('lightboxNext').addEventListener('click', ()=>{
   renderLightbox();
 });
 
-async function storageSetWithRetry(key, value, retries){
-  for(let i=0;i<=retries;i++){
-    try{
-      const result = await window.storage.set(key, value, true);
-      if(result) return result;
-    }catch(err){
-      if(i === retries) throw err;
-      await new Promise(r=>setTimeout(r, 350*(i+1)));
-    }
-  }
-  return null;
-}
-
 async function saveRegistry(){
   try{
-    await storageSetWithRetry('tripmate-registry', JSON.stringify(TRIP_REGISTRY), 2);
+    await storageService.set('tripmate-registry', JSON.stringify(TRIP_REGISTRY));
   }catch(err){
     console.error('registry save failed', err);
   }
@@ -1990,8 +2034,8 @@ async function saveState(){
   try{
     await saveRegistry();
     if(activeTripId){
-      const result = await storageSetWithRetry('tripmate-trip-'+activeTripId, JSON.stringify(state), 2);
-      if(result){
+      const ok = await storageService.set('tripmate-trip-'+activeTripId, JSON.stringify(state));
+      if(ok){
         lastSavedLabel = new Date().toLocaleString('ja-JP', {hour:'2-digit', minute:'2-digit', month:'numeric', day:'numeric'});
         const el = document.getElementById('lastSaved');
         if(el) el.textContent = lastSavedLabel;
@@ -2004,9 +2048,9 @@ async function saveState(){
 
 async function migrateFromCombinedBlob(){
   try{
-    const result = await window.storage.get('tripmate-app-data', true);
-    if(result && result.value){
-      const loaded = JSON.parse(result.value);
+    const raw = await storageService.get('tripmate-app-data');
+    if(raw){
+      const loaded = JSON.parse(raw);
       if(loaded.registry && loaded.registry.length) TRIP_REGISTRY = loaded.registry;
       if(loaded.mutables){
         Object.keys(loaded.mutables).forEach(tid=>{
@@ -2015,26 +2059,26 @@ async function migrateFromCombinedBlob(){
       }
       return true;
     }
-  }catch(err){ /* no combined blob, fine */ }
+  }catch(err){ console.error('combined blob migration failed', err); }
   return false;
 }
 
 async function migrateFromLegacySingle(){
   try{
-    const old = await window.storage.get('trip-state', true);
-    if(old && old.value){
-      TRIP_MUTABLES['korea-2026'] = Object.assign(defaultMutable(), JSON.parse(old.value));
+    const raw = await storageService.get('trip-state');
+    if(raw){
+      TRIP_MUTABLES['korea-2026'] = Object.assign(defaultMutable(), JSON.parse(raw));
       return true;
     }
-  }catch(err){ /* no legacy state, fine */ }
+  }catch(err){ console.error('legacy migration failed', err); }
   return false;
 }
 
 async function loadState(){
   try{
-    const regResult = await window.storage.get('tripmate-registry', true);
-    if(regResult && regResult.value){
-      const loadedReg = JSON.parse(regResult.value);
+    const raw = await storageService.get('tripmate-registry');
+    if(raw){
+      const loadedReg = JSON.parse(raw);
       if(loadedReg && loadedReg.length) TRIP_REGISTRY = loadedReg;
     } else {
       const migrated = await migrateFromCombinedBlob();
@@ -2042,8 +2086,11 @@ async function loadState(){
       await saveRegistry();
     }
   }catch(err){
-    const migrated = await migrateFromCombinedBlob();
-    if(!migrated) await migrateFromLegacySingle();
+    console.error('load failed', err);
+    try{
+      const migrated = await migrateFromCombinedBlob();
+      if(!migrated) await migrateFromLegacySingle();
+    }catch(e2){ console.error('fallback migration failed', e2); }
   }
   appPhase = 'splash';
   renderRoot();
