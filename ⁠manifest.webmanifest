@@ -1,0 +1,11 @@
+{
+  "name": "TripMate",
+  "short_name": "TripMate",
+  "description": "旅も、おでかけも、もっと楽しく",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FDFBF8",
+  "theme_color": "#F5EFE6"
+}
