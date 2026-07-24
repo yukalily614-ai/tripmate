@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TripMate</title>
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234F6F52'/%3E%3Crect x='16' y='24' width='32' height='24' rx='5' fill='%23F5F1E6'/%3E%3Cpath d='M25 24v-6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v6' fill='none' stroke='%23F5F1E6' stroke-width='3'/%3E%3Cpath d='M32 33c-4-4-10-1-7.4 4 1.6 2.4 5 5 7.4 6.6 2.4-1.6 5.8-4.2 7.4-6.6C42 32 36 29 32 33z' fill='%234F6F52'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234F6F52'/%3E%3Crect x='16' y='24' width='32' height='24' rx='5' fill='%23F5F1E6'/%3E%3Cpath d='M25 24v-6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v6' fill='none' stroke='%23F5F1E6' stroke-width='3'/%3E%3Cpath d='M32 33c-4-4-10-1-7.4 4 1.6 2.4 5 5 7.4 6.6 2.4-1.6 5.8-4.2 7.4-6.6C42 32 36 29 32 33z' fill='%234F6F52'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234F6F52'/%3E%3Crect x='16' y='24' width='32' height='24' rx='5' fill='%23F5F1E6'/%3E%3Cpath d='M25 24v-6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v6' fill='none' stroke='%23F5F1E6' stroke-width='3'/%3E%3Cpath d='M32 33c-4-4-10-1-7.4 4 1.6 2.4 5 5 7.4 6.6 2.4-1.6 5.8-4.2 7.4-6.6C42 32 36 29 32 33z' fill='%234F6F52'/%3E%3C/svg%3E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="TripMate">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#4F6F52">
+<meta name="theme-color" content="#F5EFE6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:wght@600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -473,11 +474,16 @@ const CATEGORY_MAP = {
   historic:{ bg:"#F5E9DD", fg:"#A06736", svg:`<path d="M2 8.5l10-4.5 10 4.5-1 2.3H3l-1-2.3z"/><rect x="5" y="10.5" width="2" height="7.5"/><rect x="17" y="10.5" width="2" height="7.5"/><rect x="10.6" y="10.5" width="2.8" height="7.5" fill="#FFFFFF" fill-opacity="0.55"/><rect x="2" y="18.2" width="20" height="1.8" rx="0.6"/>` },
   shrine:{ bg:"#FCE4E1", fg:"#B93E28", svg:`<rect x="3" y="6" width="18" height="2" rx="0.6"/><rect x="4" y="4.2" width="16" height="1.6" rx="0.6"/><rect x="5.5" y="8" width="2" height="12"/><rect x="16.5" y="8" width="2" height="12"/><rect x="10.8" y="9" width="2.4" height="4" fill="#FFFFFF" fill-opacity="0.5"/>` },
   activity:{ bg:"#FFF0DC", fg:"#D98A3D", svg:`<rect x="3" y="7" width="18" height="10" rx="2"/><circle cx="12" cy="7" r="1.6" fill="#FFFFFF" fill-opacity="0.7"/><circle cx="12" cy="17" r="1.6" fill="#FFFFFF" fill-opacity="0.7"/><line x1="12" y1="9.5" x2="12" y2="14.5" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="1.4" stroke-dasharray="1.5,1.5"/>` },
+  sightseeing:{ bg:"#FFF4D6", fg:"#C9962E", svg:`<rect x="3" y="8" width="18" height="12" rx="2.6"/><path d="M8.2 8l1.2-2.1A1.6 1.6 0 0 1 10.8 5h2.4a1.6 1.6 0 0 1 1.4.9L15.8 8"/><circle cx="12" cy="14" r="4" fill="#FFFFFF" fill-opacity="0.55"/><circle cx="12" cy="14" r="1.9"/><rect x="16.6" y="10.2" width="2" height="1.5" rx="0.4" fill="#FFFFFF" fill-opacity="0.6"/>` },
 };
 
 function catIconHtml(key, size){
   const c = CATEGORY_MAP[key];
   if(!c) return '';
+  if(c.emoji){
+    const fs = Math.round(size*0.52);
+    return `<span class="cat-badge" style="width:${size}px;height:${size}px;background:${c.bg};font-size:${fs}px;line-height:1;">${c.emoji}</span>`;
+  }
   const s = Math.round(size*0.8);
   return `<span class="cat-badge" style="width:${size}px;height:${size}px;background:${c.bg};color:${c.fg}"><svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="currentColor">${c.svg}</svg></span>`;
 }
@@ -976,6 +982,59 @@ function collectAllPhotos(){
 }
 
 // ---------------- 詳細シート ----------------
+function buildPhotosEditHtml(images){
+  return `
+    <div class="detail-section-label">📷 写真 <span style="font-weight:400;color:var(--ink-soft);">(最大3枚)</span></div>
+    <div class="detail-photos" id="detailPhotos">
+      ${images.map((img,idx)=>`<div class="detail-photo-item"><img src="${img}"><button type="button" class="photo-del" data-photo-del="${idx}">✕</button></div>`).join('')}
+      ${images.length < 3 ? `<label class="photo-add-btn">＋<input type="file" accept="image/*" id="detailPhotoInput" style="display:none;"></label>` : ''}
+    </div>
+  `;
+}
+
+function bindPhotoEditHandlers(id){
+  const photoInput = document.getElementById('detailPhotoInput');
+  if(photoInput){
+    photoInput.addEventListener('change', async e=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      try{
+        const base64 = await resizeImageFile(file, 720);
+        const d = state.itemDetails[id] || {};
+        d.images = d.images || [];
+        d.images.push('data:image/jpeg;base64,'+base64);
+        state.itemDetails[id] = d;
+        refreshPhotosEdit(id);
+      }catch(err){ console.error('photo add failed', err); }
+    });
+  }
+  document.querySelectorAll('#detailPhotosEdit [data-photo-del]').forEach(btn=>{
+    btn.addEventListener('click', e=>{
+      const d = state.itemDetails[id] || {};
+      d.images = d.images || [];
+      d.images.splice(+e.currentTarget.dataset.photoDel, 1);
+      state.itemDetails[id] = d;
+      refreshPhotosEdit(id);
+    });
+  });
+  document.querySelectorAll('#detailPhotosEdit .detail-photo-item img').forEach((img, idx)=>{
+    img.addEventListener('click', e=>{
+      e.stopPropagation();
+      const imgs = (state.itemDetails[id] && state.itemDetails[id].images) || [];
+      openLightbox(imgs, idx);
+    });
+  });
+}
+
+function refreshPhotosEdit(id){
+  const container = document.getElementById('detailPhotosEdit');
+  if(!container) return;
+  const details = state.itemDetails[id] || {};
+  const images = details.images || [];
+  container.innerHTML = buildPhotosEditHtml(images);
+  bindPhotoEditHandlers(id);
+}
+
 function buildDetailHtml(item){
   const dc = getDisplayContent(item);
   const dt = getDisplayTime(item);
@@ -1001,13 +1060,7 @@ function buildDetailHtml(item){
       ${images.length>1 ? `<button type="button" class="pager-nav prev" id="pagerPrev">‹</button><button type="button" class="pager-nav next" id="pagerNext">›</button><div class="pager-count" id="pagerCount">1/${images.length}</div>` : ''}
     </div>
   ` : '';
-  const photosEditHtml = `
-    <div class="detail-section-label">📷 写真 <span style="font-weight:400;color:var(--ink-soft);">(最大3枚)</span></div>
-    <div class="detail-photos" id="detailPhotos">
-      ${images.map((img,idx)=>`<div class="detail-photo-item"><img src="${img}"><button type="button" class="photo-del" data-photo-del="${idx}">✕</button></div>`).join('')}
-      ${images.length < 3 ? `<label class="photo-add-btn">＋<input type="file" accept="image/*" id="detailPhotoInput" style="display:none;"></label>` : ''}
-    </div>
-  `;
+  const photosEditHtml = buildPhotosEditHtml(images);
 
   const isShopCat = catKey === 'shopping';
   let shopHtml = '';
@@ -1171,40 +1224,9 @@ function openDetail(id){
     openDetail(id);
   });
 
-  const photoInput = document.getElementById('detailPhotoInput');
-  if(photoInput){
-    photoInput.addEventListener('change', async e=>{
-      const file = e.target.files[0];
-      if(!file) return;
-      try{
-        const base64 = await resizeImageFile(file, 720);
-        const d = state.itemDetails[id] || {};
-        d.images = d.images || [];
-        d.images.push('data:image/jpeg;base64,'+base64);
-        state.itemDetails[id] = d;
-        scheduleSave();
-        openDetail(id);
-      }catch(err){ console.error('photo add failed', err); }
-    });
-  }
-  sheet.querySelectorAll('[data-photo-del]').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      const d = state.itemDetails[id] || {};
-      d.images = d.images || [];
-      d.images.splice(+e.currentTarget.dataset.photoDel, 1);
-      state.itemDetails[id] = d;
-      scheduleSave();
-      openDetail(id);
-    });
-  });
+  bindPhotoEditHandlers(id);
 
   const currentImages = (state.itemDetails[id] && state.itemDetails[id].images) || [];
-  sheet.querySelectorAll('.detail-photo-item img').forEach((img, idx)=>{
-    img.addEventListener('click', e=>{
-      e.stopPropagation();
-      openLightbox(currentImages, idx);
-    });
-  });
   let pagerIdx = 0;
   const pagerImgEl = document.getElementById('pagerImg');
   const pagerCountEl = document.getElementById('pagerCount');
