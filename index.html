@@ -1168,9 +1168,8 @@ function commitDetailEdits(id, item){
   if(memoEl) state.notes[id] = memoEl.value;
 }
 
-async function autoLookupPlace(title, destination){
-  const query = destination ? `${title} ${destination}` : title;
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&addressdetails=1&extratags=1&limit=1&accept-language=ja`;
+async function autoLookupPlace(title){
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(title)}&addressdetails=1&extratags=1&limit=1&accept-language=ja`;
   const response = await fetch(url);
   if(!response.ok) throw new Error('nominatim request failed: ' + response.status);
   const results = await response.json();
