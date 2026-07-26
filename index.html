@@ -172,6 +172,19 @@
   .time-input{ font-family:'Zen Maru Gothic', sans-serif; font-size:12px; border:1px solid var(--line); border-radius:7px; padding:5px 6px; width:fit-content; }
   .t-sep{ font-size:11px; color: var(--ink-soft); margin:0 4px; }
   .detail-field{ width:100%; border-radius:9px; border:1px solid var(--line); padding:8px 10px; font-size:12.5px; font-family:'Noto Sans JP', sans-serif; }
+  .title-search-wrap{ position:relative; }
+  .suggest-list{ display:none; flex-direction:column; background:var(--paper); border:1px solid var(--line); border-radius:10px; margin-top:4px; overflow:hidden; box-shadow:0 6px 16px rgba(74,59,46,0.14); position:absolute; top:100%; left:0; right:0; z-index:20; }
+  .suggest-list.open{ display:flex; }
+  .suggest-item{ padding:9px 12px; font-size:12.5px; cursor:pointer; border-bottom:1px solid var(--line); background:var(--paper); }
+  .suggest-item:last-child{ border-bottom:none; }
+  .suggest-item:active{ background:var(--paper-2); }
+  .suggest-main{ font-weight:700; color:var(--text-ink); }
+  .suggest-sub{ font-size:11px; color:var(--ink-soft); margin-top:1px; }
+  .suggest-loading{ padding:10px 12px; font-size:12px; color:var(--ink-soft); display:flex; align-items:center; gap:8px; background:var(--paper); }
+  .spinner{ width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--teal); border-radius:50%; animation:spin 0.7s linear infinite; flex-shrink:0; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .app-toast{ position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px); background:#3A2E22; color:#fff; padding:11px 18px; border-radius:999px; font-size:12.5px; font-family:'Zen Maru Gothic', sans-serif; opacity:0; pointer-events:none; transition:all .25s ease; z-index:4000; max-width:86%; text-align:center; box-shadow:0 8px 20px rgba(0,0,0,0.25); }
+  .app-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   .lookup-btn{ background: var(--teal); color:#fff; border:none; border-radius:10px; padding:9px 14px; font-weight:700; font-size:12.5px; cursor:pointer; font-family:'Zen Maru Gothic', sans-serif; align-self:flex-start; }
   .lookup-btn:disabled{ opacity:0.6; cursor:default; }
   .lookup-status{ font-size:11px; color: var(--ink-soft); }
@@ -608,7 +621,89 @@ class LocalStorageService{
   }
 }
 
-const storageService = new LocalStorageService();
+const storageServiceLocal = new LocalStorageService();
+let storageService = storageServiceLocal;
+
+// ---------------- FirebaseStorageService(2端末間リアルタイム共有用) ----------------
+// LocalStorageServiceと同じインターフェース(get/set/remove/onChange)を実装。
+// FIREBASE_CONFIGを自分のFirebaseプロジェクトの値に置き換えるだけで有効になります。
+// 未設定の場合は自動でLocalStorageServiceにフォールバックし、
+// 通信に一時的に失敗した場合もtry-catchで捕捉してアプリ全体がクラッシュしないようにしています。
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_FIREBASE_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+class FirebaseStorageService{
+  constructor(db, fns){
+    this.db = db;
+    this.fns = fns; // { doc, getDoc, setDoc, deleteDoc, onSnapshot }
+  }
+  async get(key){
+    try{
+      const ref = this.fns.doc(this.db, 'tripmate', key);
+      const snap = await this.fns.getDoc(ref);
+      return snap.exists() ? snap.data().value : null;
+    }catch(err){
+      console.error('FirebaseStorageService.get failed:', key, err);
+      return null;
+    }
+  }
+  async set(key, value){
+    try{
+      const ref = this.fns.doc(this.db, 'tripmate', key);
+      await this.fns.setDoc(ref, { value, updatedAt: Date.now() });
+      return true;
+    }catch(err){
+      console.error('FirebaseStorageService.set failed:', key, err);
+      return false;
+    }
+  }
+  async remove(key){
+    try{
+      const ref = this.fns.doc(this.db, 'tripmate', key);
+      await this.fns.deleteDoc(ref);
+      return true;
+    }catch(err){
+      console.error('FirebaseStorageService.remove failed:', key, err);
+      return false;
+    }
+  }
+  onChange(key, callback){
+    try{
+      const ref = this.fns.doc(this.db, 'tripmate', key);
+      return this.fns.onSnapshot(ref, snap=>{
+        if(snap.exists()) callback(snap.data().value);
+      }, err=> console.error('onSnapshot error:', key, err));
+    }catch(err){
+      console.error('FirebaseStorageService.onChange failed:', key, err);
+      return function unsubscribe(){};
+    }
+  }
+}
+
+async function initStorageService(){
+  const hasFirebaseConfig = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('YOUR_');
+  if(!hasFirebaseConfig){
+    console.warn('Firebase設定が未入力のため、端末内保存(localStorage)のみで動作します。2人で共有したい場合はFIREBASE_CONFIGを設定してください。');
+    storageService = storageServiceLocal;
+    return;
+  }
+  try{
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db = getFirestore(app);
+    storageService = new FirebaseStorageService(db, { doc, getDoc, setDoc, deleteDoc, onSnapshot });
+  }catch(err){
+    console.error('Firebase初期化に失敗しました。localStorageにフォールバックします。', err);
+    storageService = storageServiceLocal;
+  }
+}
 
 let TRIP_MUTABLES = {};
 let activeTripId = null;
@@ -1106,7 +1201,10 @@ function buildDetailHtml(item){
     </div>
     <div id="detailCoreEdit">
       ${canEditTime ? `<div class="detail-time-edit-row"><input type="time" class="time-input" id="detailEditTime" value="${toHM(dt.time)}"><span class="t-sep">–</span><input type="time" class="time-input" id="detailEditTimeEnd" value="${toHM(dt.end)}"></div>` : ''}
-      <input type="text" class="edit-title" id="detailEditTitle" placeholder="タイトル" value="${escapeAttr(dc.title)}">
+      <div class="title-search-wrap">
+        <input type="text" class="edit-title" id="detailEditTitle" placeholder="タイトル(店名で検索候補が出ます)" value="${escapeAttr(dc.title)}" autocomplete="off">
+        <div class="suggest-list" id="detailSuggestList"></div>
+      </div>
       <textarea class="edit-note" id="detailEditNote" placeholder="メモ・詳細(JRなど)">${dc.note||''}</textarea>
     </div>
     ${item.risk ? `<div class="risk">⚠ ${item.risk}</div>` : ''}
@@ -1126,8 +1224,6 @@ function buildDetailHtml(item){
     <div id="detailPhotosEdit">${photosEditHtml}</div>
     <div id="detailInfoDisplay">${infoDisplayRows || '<div style="font-size:12px;color:var(--ink-soft);margin-top:8px;">住所・電話番号などはまだ未入力です。✏️編集から追加できます。</div>'}</div>
     <div id="detailInfoEdit">
-      <button type="button" class="lookup-btn" id="detailLookupBtn">🔍 タイトルから自動で調べる</button>
-      <span class="lookup-status" id="detailLookupStatus"></span>
       <input type="text" class="detail-field" id="detailField_address" placeholder="📍 住所" value="${escapeAttr(details.address||'')}">
       <input type="text" class="detail-field" id="detailField_phone" placeholder="📞 電話番号" value="${escapeAttr(details.phone||'')}">
       <input type="text" class="detail-field" id="detailField_hours" placeholder="🕒 営業時間 (例: 10:00〜22:00)" value="${escapeAttr(details.hours||'')}">
@@ -1168,20 +1264,51 @@ function commitDetailEdits(id, item){
   if(memoEl) state.notes[id] = memoEl.value;
 }
 
-async function autoLookupPlace(title){
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(title)}&addressdetails=1&extratags=1&limit=1&accept-language=ja`;
-  const response = await fetch(url);
-  if(!response.ok) throw new Error('nominatim request failed: ' + response.status);
-  const results = await response.json();
-  if(!results || !results.length) throw new Error('no results found');
-  const r = results[0];
-  const extratags = r.extratags || {};
-  return {
-    address: r.display_name || '',
-    phone: extratags.phone || extratags['contact:phone'] || '',
-    hours: extratags.opening_hours || '',
-    website: extratags.website || extratags['contact:website'] || ''
-  };
+function formatJapaneseAddress(addr){
+  if(!addr) return '';
+  const postcode = addr.postcode ? `〒${addr.postcode} ` : '';
+  const state = addr.state || '';
+  const city = addr.city || addr.town || addr.county || '';
+  const ward = (addr.city_district && addr.city_district !== city) ? addr.city_district : '';
+  const suburb = addr.suburb || addr.neighbourhood || '';
+  const road = (addr.road && addr.road !== suburb) ? addr.road : '';
+  const houseNumber = addr.house_number || '';
+  const parts = [state, city, ward, suburb, road, houseNumber].filter(Boolean);
+  const deduped = parts.filter((p, i) => i === 0 || p !== parts[i-1]);
+  return postcode + deduped.join('');
+}
+
+// ---------------- PlacesRepository ----------------
+// UIとAPI呼び出しを分離する層。実際の通信はすべて自前のサーバーレス関数
+// (/api/places-autocomplete, /api/places-details) 経由で行い、
+// Google Places APIキーはサーバー側の環境変数からのみ読み込まれるため
+// ブラウザ側にキーが露出しません。
+const PlacesRepository = {
+  async autocomplete(input){
+    const res = await fetch(`/api/places-autocomplete?input=${encodeURIComponent(input)}`);
+    if(!res.ok) throw new Error('autocomplete request failed: ' + res.status);
+    const data = await res.json();
+    return data.suggestions || [];
+  },
+  async getDetails(placeId){
+    const res = await fetch(`/api/places-details?placeId=${encodeURIComponent(placeId)}`);
+    if(!res.ok) throw new Error('details request failed: ' + res.status);
+    return await res.json();
+  }
+};
+
+function showToast(message){
+  let toast = document.getElementById('appToast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'appToast';
+    toast.className = 'app-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> toast.classList.remove('show'), 2800);
 }
 
 function openDetail(id){
@@ -1271,34 +1398,69 @@ function openDetail(id){
     });
   }
 
-  const lookupBtn = document.getElementById('detailLookupBtn');
-  if(lookupBtn){
-    lookupBtn.addEventListener('click', async ()=>{
-      const titleEl = document.getElementById('detailEditTitle');
-      const titleVal = titleEl ? titleEl.value.trim() : '';
-      const statusEl = document.getElementById('detailLookupStatus');
-      if(!titleVal){
-        statusEl.textContent = 'タイトルを入力してください';
-        return;
-      }
-      statusEl.textContent = '検索中…';
-      lookupBtn.disabled = true;
-      try{
-        const result = await autoLookupPlace(titleVal, TRIP_CONFIG.destination || '');
-        const addrEl = document.getElementById('detailField_address');
-        const phoneEl = document.getElementById('detailField_phone');
-        const hoursEl = document.getElementById('detailField_hours');
-        const webEl = document.getElementById('detailField_website');
-        if(addrEl && result.address) addrEl.value = result.address;
-        if(phoneEl && result.phone) phoneEl.value = result.phone;
-        if(hoursEl && result.hours) hoursEl.value = result.hours;
-        if(webEl && result.website) webEl.value = result.website;
-        statusEl.textContent = '✓ 見つかった情報を入力しました（「完了して保存」を押してください）';
-      }catch(err){
-        console.error('lookup failed', err);
-        statusEl.textContent = '見つかりませんでした。手入力してください';
-      }
-      lookupBtn.disabled = false;
+  let suggestDebounce = null;
+  const titleInputEl = document.getElementById('detailEditTitle');
+  const suggestListEl = document.getElementById('detailSuggestList');
+  if(titleInputEl && suggestListEl){
+    titleInputEl.addEventListener('input', ()=>{
+      clearTimeout(suggestDebounce);
+      const q = titleInputEl.value.trim();
+      if(q.length < 2){ suggestListEl.classList.remove('open'); suggestListEl.innerHTML = ''; return; }
+      suggestDebounce = setTimeout(async ()=>{
+        suggestListEl.classList.add('open');
+        suggestListEl.innerHTML = `<div class="suggest-loading"><div class="spinner"></div>候補を検索中…</div>`;
+        try{
+          const suggestions = await PlacesRepository.autocomplete(q);
+          if(!suggestions.length){
+            suggestListEl.innerHTML = `<div class="suggest-loading">候補が見つかりませんでした</div>`;
+            return;
+          }
+          suggestListEl.innerHTML = suggestions.map(s=>`
+            <div class="suggest-item" data-place-id="${escapeAttr(s.placeId)}">
+              <div class="suggest-main">${s.mainText}</div>
+              ${s.secondaryText ? `<div class="suggest-sub">${s.secondaryText}</div>` : ''}
+            </div>
+          `).join('');
+          suggestListEl.querySelectorAll('.suggest-item').forEach(el=>{
+            el.addEventListener('click', async ()=>{
+              const placeId = el.dataset.placeId;
+              const mainText = el.querySelector('.suggest-main').textContent;
+              titleInputEl.value = mainText;
+              suggestListEl.innerHTML = `<div class="suggest-loading"><div class="spinner"></div>詳細を取得中…</div>`;
+              try{
+                const details2 = await PlacesRepository.getDetails(placeId);
+                const addrEl = document.getElementById('detailField_address');
+                const phoneEl = document.getElementById('detailField_phone');
+                const hoursEl = document.getElementById('detailField_hours');
+                const webEl = document.getElementById('detailField_website');
+                if(addrEl) addrEl.value = details2.address || '';
+                if(phoneEl) phoneEl.value = details2.phone || '';
+                if(hoursEl) hoursEl.value = details2.hours || '';
+                if(webEl) webEl.value = details2.website || '';
+                if(details2.rating){
+                  const d = state.itemDetails[id] || {};
+                  d.rating = details2.rating;
+                  state.itemDetails[id] = d;
+                }
+                suggestListEl.classList.remove('open');
+                suggestListEl.innerHTML = '';
+                showToast('候補から情報を入力しました');
+              }catch(err){
+                console.error('place details failed', err);
+                suggestListEl.classList.remove('open');
+                showToast('詳細情報の取得に失敗しました。住所などは手入力してください');
+              }
+            });
+          });
+        }catch(err){
+          console.error('autocomplete failed', err);
+          suggestListEl.innerHTML = `<div class="suggest-loading">検索に失敗しました。住所などは手入力してください</div>`;
+          showToast('候補の検索に失敗しました');
+        }
+      }, 350);
+    });
+    titleInputEl.addEventListener('blur', ()=>{
+      setTimeout(()=>{ suggestListEl.classList.remove('open'); }, 200);
     });
   }
 
