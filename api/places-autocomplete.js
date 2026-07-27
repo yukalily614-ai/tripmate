@@ -10,52 +10,36 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const response = await fetch(
-      'https://places.googleapis.com/v1/places:autocomplete',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-        },
-        body: JSON.stringify({
-          input: input,
-          languageCode: 'ja',
-        }),
-      }
-    );
-
+    // 確実に動く旧方式の API エンドポイントを使用
+    const apiUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&language=ja&key=${apiKey}`;
+    
+    const response = await fetch(apiUrl);
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Autocomplete API Error:', data);
+      console.error('Autocomplete API Network Error:', data);
       return res.status(response.status).json(data);
     }
 
-    // 安全にデータを取り出す処理
-    const suggestions = data.suggestions || [];
-    const predictions = suggestions.map((s) => {
-      const p = s.placePrediction;
-      if (!p) return null;
+    if (data.status === 'OK' && data.predictions) {
+      // フロントエンドが読み取れる旧形式・新形式両方のプロパティ名で返す
+      const predictions = data.predictions.map((p) => {
+        return {
+          placeId: p.place_id,
+          place_id: p.place_id,
+          description: p.description,
+          mainText: p.structured_formatting?.main_text || '',
+          secondaryText: p.structured_formatting?.secondary_text || '',
+          raw: p
+        };
+      });
+      return res.status(200).json({ predictions });
+    }
 
-      const mainText = p.structuredFormat?.mainText?.text || p.text?.text || '';
-      const secondaryText = p.structuredFormat?.secondaryText?.text || '';
-      const description = secondaryText ? `${mainText} ${secondaryText}` : mainText;
+    // Googleから「OK」以外が返ってきた場合
+    console.error('Autocomplete API Status Error:', data);
+    return res.status(200).json({ predictions: [], error: data.status, message: data.error_message });
 
-      return {
-        placeId: p.placeId || p.place,
-        place_id: p.placeId || p.place,
-        description: description,
-        mainText: mainText,
-        secondaryText: secondaryText,
-        structured_formatting: {
-          main_text: mainText,
-          secondary_text: secondaryText,
-        }
-      };
-    }).filter(Boolean);
-
-    return res.status(200).json({ predictions });
   } catch (err) {
     console.error('Server Catch Error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
