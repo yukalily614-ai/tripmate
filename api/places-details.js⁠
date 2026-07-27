@@ -10,6 +10,7 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // 1. まず Places API (New) を試す
     const fields = [
       'displayName',
       'formattedAddress',
@@ -20,7 +21,7 @@ module.exports = async (req, res) => {
       'rating',
     ].join(',');
 
-    const response = await fetch(
+    const newApiResponse = await fetch(
       `https://places.googleapis.com/v1/places/${placeId}?fields=${fields}`,
       {
         headers: {
@@ -29,34 +30,59 @@ module.exports = async (req, res) => {
       }
     );
 
-    const data = await response.json();
-    if (!response.ok) {
-      console.error('Places API Error:', data);
-      return res.status(response.status).json(data);
+    if (newApiResponse.ok) {
+      const data = await newApiResponse.json();
+      const address = data.formattedAddress || '';
+      const phone = data.nationalPhoneNumber || data.internationalPhoneNumber || '';
+      const website = data.websiteUri || '';
+      const rating = data.rating || null;
+      const hours = data.regularOpeningHours?.weekdayDescriptions || [];
+
+      return res.status(200).json({
+        address: address,
+        formattedAddress: address,
+        phone: phone,
+        phoneNumber: phone,
+        website: website,
+        websiteUri: website,
+        rating: rating,
+        hours: hours,
+        raw: data
+      });
     }
 
-    // 安全に値を取り出すための補助処理
-    const address = data.formattedAddress || '';
-    const phone = data.nationalPhoneNumber || data.internationalPhoneNumber || '';
-    const website = data.websiteUri || '';
-    const rating = data.rating || null;
-    const hours = (data.regularOpeningHours && data.regularOpeningHours.weekdayDescriptions) 
-      ? data.regularOpeningHours.weekdayDescriptions 
-      : [];
+    // 2. New API で取得できなかった場合、旧 Places API にフォールバック
+    const oldApiUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&language=ja&key=${apiKey}`;
+    const oldApiResponse = await fetch(oldApiUrl);
+    const oldData = await oldApiResponse.json();
 
-    return res.status(200).json({
-      address: address,
-      formattedAddress: address,
-      phone: phone,
-      phoneNumber: phone,
-      website: website,
-      websiteUri: website,
-      rating: rating,
-      hours: hours,
-      raw: data
-    });
+    if (oldData.status === 'OK' && oldData.result) {
+      const result = oldData.result;
+      const address = result.formatted_address || '';
+      const phone = result.formatted_phone_number || '';
+      const website = result.website || '';
+      const rating = result.rating || null;
+      const hours = result.opening_hours?.weekday_text || [];
+
+      return res.status(200).json({
+        address: address,
+        formattedAddress: address,
+        phone: phone,
+        phoneNumber: phone,
+        website: website,
+        websiteUri: website,
+        rating: rating,
+        hours: hours,
+        raw: result
+      });
+    }
+
+    // 両方失敗した場合
+    console.error('Both New and Old Places API failed:', oldData);
+    return res.status(400).json({ error: 'Failed to fetch place details from Google APIs' });
+
   } catch (err) {
-    console.error('Server Catch Error:', err);
+    console.error('Server Error:', err);
     return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 };
