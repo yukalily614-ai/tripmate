@@ -1,53 +1,47 @@
 module.exports = async (req, res) => {
-  const placeId = req.query.placeId;
-  if (!placeId) {
-    return res.status(400).json({ error: 'placeId parameter is required' });
+  const input = req.query.input;
+  if (!input) {
+    return res.status(400).json({ error: 'input is required' });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key is not configured' });
+    return res.status(500).json({ error: 'GOOGLE_PLACES_API_KEY is not set' });
   }
 
   try {
-    const fields = [
-      'displayName',
-      'formattedAddress',
-      'internationalPhoneNumber',
-      'nationalPhoneNumber',
-      'regularOpeningHours',
-      'websiteUri',
-      'rating',
-    ].join(',');
-
-    const response = await fetch(
-      `https://places.googleapis.com/v1/places/${placeId}?fields=${fields}`,
-      {
-        headers: {
-          'X-Goog-Api-Key': apiKey,
-        },
-      }
-    );
+    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
+      body: JSON.stringify({
+        input,
+        languageCode: 'ja',
+      }),
+    });
 
     const data = await response.json();
+
     if (!response.ok) {
-      return res.status(response.status).json(data);
+      return res.status(response.status).json({ error: data.error?.message || 'Google API error' });
     }
 
-    // フロントエンドが読み取れる旧形式・新形式両方のプロパティ名で返す
-    return res.status(200).json({
-      address: data.formattedAddress || '',
-      formattedAddress: data.formattedAddress || '',
-      phone: data.nationalPhoneNumber || data.internationalPhoneNumber || '',
-      phoneNumber: data.nationalPhoneNumber || data.internationalPhoneNumber || '',
-      website: data.websiteUri || '',
-      websiteUri: data.websiteUri || '',
-      rating: data.rating || null,
-      hours: data.regularOpeningHours?.weekdayDescriptions || [],
-      raw: data
-    });
+    const suggestions = (data.suggestions || [])
+      .filter((s) => s.placePrediction)
+      .map((s) => ({
+        placeId: s.placePrediction.placeId,
+        mainText:
+          s.placePrediction.structuredFormat?.mainText?.text ||
+          s.placePrediction.text?.text ||
+          '',
+        secondaryText: s.placePrediction.structuredFormat?.secondaryText?.text || '',
+      }));
+
+    res.status(200).json({ suggestions });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'internal error' });
   }
 };
