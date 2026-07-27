@@ -1286,14 +1286,35 @@ function formatJapaneseAddress(addr){
 const PlacesRepository = {
   async autocomplete(input){
     const res = await fetch(`/api/places-autocomplete?input=${encodeURIComponent(input)}`);
-    if(!res.ok) throw new Error('autocomplete request failed: ' + res.status);
-    const data = await res.json();
-    return data.suggestions || [];
+    let data = null;
+    try{ data = await res.json(); }catch(e){ /* JSONでない応答 */ }
+    if(!res.ok){
+      const detail = (data && data.error) ? data.error : `HTTP ${res.status}`;
+      throw new Error(`autocomplete失敗: ${detail}`);
+    }
+    return (data && data.suggestions) || [];
   },
   async getDetails(placeId){
     const res = await fetch(`/api/places-details?placeId=${encodeURIComponent(placeId)}`);
-    if(!res.ok) throw new Error('details request failed: ' + res.status);
-    return await res.json();
+    let data = null;
+    try{ data = await res.json(); }catch(e){ /* JSONでない応答 */ }
+    if(!res.ok){
+      const detail = (data && data.error) ? data.error : `HTTP ${res.status}`;
+      throw new Error(`details失敗: ${detail}`);
+    }
+    data = data || {};
+    // バックエンドの実装差異・新旧APIのプロパティ名の違いを吸収する防御的パース
+    const address = data.address || data.formattedAddress || '';
+    const phone = data.phone || data.internationalPhoneNumber || data.nationalPhoneNumber || '';
+    let hours = data.hours;
+    if(Array.isArray(hours)) hours = hours.join(' / ');
+    if(!hours){
+      const oh = data.regularOpeningHours || data.currentOpeningHours || data.openingHours;
+      if(oh && Array.isArray(oh.weekdayDescriptions)) hours = oh.weekdayDescriptions.join(' / ');
+    }
+    const website = data.website || data.websiteUri || '';
+    const rating = (typeof data.rating === 'number') ? data.rating : null;
+    return { address, phone, hours: hours || '', website, rating };
   }
 };
 
