@@ -1,12 +1,12 @@
 module.exports = async (req, res) => {
   const placeId = req.query.placeId;
   if (!placeId) {
-    return res.status(400).json({ error: 'placeId is required' });
+    return res.status(400).json({ error: 'placeId parameter is required' });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'GOOGLE_PLACES_API_KEY is not set' });
+    return res.status(500).json({ error: 'API key is not configured' });
   }
 
   try {
@@ -14,31 +14,49 @@ module.exports = async (req, res) => {
       'displayName',
       'formattedAddress',
       'internationalPhoneNumber',
+      'nationalPhoneNumber',
       'regularOpeningHours',
       'websiteUri',
       'rating',
     ].join(',');
 
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?fields=${fields}&languageCode=ja`,
-      { headers: { 'X-Goog-Api-Key': apiKey } }
+      `https://places.googleapis.com/v1/places/${placeId}?fields=${fields}`,
+      {
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+        },
+      }
     );
 
     const data = await response.json();
-
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'Google API error' });
+      console.error('Places API Error:', data);
+      return res.status(response.status).json(data);
     }
 
-    res.status(200).json({
-      address: data.formattedAddress || '',
-      phone: data.internationalPhoneNumber || '',
-      hours: (data.regularOpeningHours?.weekdayDescriptions || []).join(' / '),
-      website: data.websiteUri || '',
-      rating: data.rating || null,
+    // 安全に値を取り出すための補助処理
+    const address = data.formattedAddress || '';
+    const phone = data.nationalPhoneNumber || data.internationalPhoneNumber || '';
+    const website = data.websiteUri || '';
+    const rating = data.rating || null;
+    const hours = (data.regularOpeningHours && data.regularOpeningHours.weekdayDescriptions) 
+      ? data.regularOpeningHours.weekdayDescriptions 
+      : [];
+
+    return res.status(200).json({
+      address: address,
+      formattedAddress: address,
+      phone: phone,
+      phoneNumber: phone,
+      website: website,
+      websiteUri: website,
+      rating: rating,
+      hours: hours,
+      raw: data
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'internal error' });
+    console.error('Server Catch Error:', err);
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 };
