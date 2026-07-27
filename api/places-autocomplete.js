@@ -28,20 +28,30 @@ module.exports = async (req, res) => {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Autocomplete Error:', data);
+      console.error('Autocomplete API Error:', data);
       return res.status(response.status).json(data);
     }
 
-    // フロントエンドが placeId / place_id どちらでも読み取れるように変換して返す
-    const predictions = (data.suggestions || []).map((s) => {
+    // 安全にデータを取り出す処理
+    const suggestions = data.suggestions || [];
+    const predictions = suggestions.map((s) => {
       const p = s.placePrediction;
       if (!p) return null;
+
+      const mainText = p.structuredFormat?.mainText?.text || p.text?.text || '';
+      const secondaryText = p.structuredFormat?.secondaryText?.text || '';
+      const description = secondaryText ? `${mainText} ${secondaryText}` : mainText;
+
       return {
-        placeId: p.placeId,
-        place_id: p.placeId, // 旧形式用のプロパティ名も同時にセット！
-        description: p.text?.text || '',
-        mainText: p.structuredFormat?.mainText?.text || p.text?.text || '',
-        secondaryText: p.structuredFormat?.secondaryText?.text || '',
+        placeId: p.placeId || p.place,
+        place_id: p.placeId || p.place,
+        description: description,
+        mainText: mainText,
+        secondaryText: secondaryText,
+        structured_formatting: {
+          main_text: mainText,
+          secondary_text: secondaryText,
+        }
       };
     }).filter(Boolean);
 
