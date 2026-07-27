@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const input = req.query.input;
   if (!input) {
     return res.status(400).json({ error: 'input is required' });
@@ -44,4 +44,4 @@ export default async function handler(req, res) {
     console.error(err);
     res.status(500).json({ error: 'internal error' });
   }
-}
+};
