@@ -1,47 +1,47 @@
 module.exports = async (req, res) => {
   const input = req.query.input;
   if (!input) {
-    return res.status(400).json({ error: 'input parameter is required' });
+    return res.status(400).json({ error: 'input is required' });
   }
 
   const apiKey = process.env.GOOGLE_PLACES_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key is not configured' });
+    return res.status(500).json({ error: 'GOOGLE_PLACES_API_KEY is not set' });
   }
 
   try {
-    // 確実に動く旧方式の API エンドポイントを使用
-    const apiUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&language=ja&key=${apiKey}`;
-    
-    const response = await fetch(apiUrl);
+    const response = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
+      body: JSON.stringify({
+        input,
+        languageCode: 'ja',
+      }),
+    });
+
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Autocomplete API Network Error:', data);
-      return res.status(response.status).json(data);
+      return res.status(response.status).json({ error: data.error?.message || 'Google API error' });
     }
 
-    if (data.status === 'OK' && data.predictions) {
-      // フロントエンドが読み取れる旧形式・新形式両方のプロパティ名で返す
-      const predictions = data.predictions.map((p) => {
-        return {
-          placeId: p.place_id,
-          place_id: p.place_id,
-          description: p.description,
-          mainText: p.structured_formatting?.main_text || '',
-          secondaryText: p.structured_formatting?.secondary_text || '',
-          raw: p
-        };
-      });
-      return res.status(200).json({ predictions });
-    }
+    const suggestions = (data.suggestions || [])
+      .filter((s) => s.placePrediction)
+      .map((s) => ({
+        placeId: s.placePrediction.placeId,
+        mainText:
+          s.placePrediction.structuredFormat?.mainText?.text ||
+          s.placePrediction.text?.text ||
+          '',
+        secondaryText: s.placePrediction.structuredFormat?.secondaryText?.text || '',
+      }));
 
-    // Googleから「OK」以外が返ってきた場合
-    console.error('Autocomplete API Status Error:', data);
-    return res.status(200).json({ predictions: [], error: data.status, message: data.error_message });
-
+    res.status(200).json({ suggestions });
   } catch (err) {
-    console.error('Server Catch Error:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    console.error(err);
+    res.status(500).json({ error: 'internal error' });
   }
 };
