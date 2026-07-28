@@ -1422,66 +1422,100 @@ function openDetail(id){
   let suggestDebounce = null;
   const titleInputEl = document.getElementById('detailEditTitle');
   const suggestListEl = document.getElementById('detailSuggestList');
+  let suggestPointerDownOnItem = false;
+
+  function renderSuggestLoading(msg){
+    suggestListEl.innerHTML = `<div class="suggest-loading"><div class="spinner"></div>${msg}</div>`;
+  }
+  function renderSuggestMessage(msg){
+    suggestListEl.innerHTML = `<div class="suggest-loading">${msg}</div>`;
+  }
+  function closeSuggestList(){
+    suggestListEl.classList.remove('open');
+    suggestListEl.innerHTML = '';
+  }
+
+  async function handleSuggestionSelect(placeId, mainText){
+    titleInputEl.value = mainText;
+    renderSuggestLoading('詳細を取得中…');
+    try{
+      const details2 = await PlacesRepository.getDetails(placeId);
+      const addrEl = document.getElementById('detailField_address');
+      const phoneEl = document.getElementById('detailField_phone');
+      const hoursEl = document.getElementById('detailField_hours');
+      const webEl = document.getElementById('detailField_website');
+      if(addrEl) addrEl.value = details2.address || '';
+      if(phoneEl) phoneEl.value = details2.phone || '';
+      if(hoursEl) hoursEl.value = details2.hours || '';
+      if(webEl) webEl.value = details2.website || '';
+      if(details2.rating){
+        const d = state.itemDetails[id] || {};
+        d.rating = details2.rating;
+        state.itemDetails[id] = d;
+      }
+      closeSuggestList();
+      const filledCount = [details2.address, details2.phone, details2.hours, details2.website].filter(Boolean).length;
+      showToast(filledCount === 0
+        ? '候補は選択できましたが、Google側にこの場所の詳細情報がありませんでした'
+        : `情報を入力しました(住所・電話番号など ${filledCount}項目)`);
+    }catch(err){
+      console.error('place details failed', err);
+      closeSuggestList();
+      showToast('詳細情報の取得エラー: ' + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  function renderSuggestions(suggestions){
+    if(!suggestions.length){
+      renderSuggestMessage('候補が見つかりませんでした');
+      return;
+    }
+    suggestListEl.innerHTML = suggestions.map(s=>`
+      <div class="suggest-item" data-place-id="${escapeAttr(s.placeId)}">
+        <div class="suggest-main">${s.mainText}</div>
+        ${s.secondaryText ? `<div class="suggest-sub">${s.secondaryText}</div>` : ''}
+      </div>
+    `).join('');
+    // mousedownで処理する(inputのblurより先に発火させ、選択の取りこぼしを防ぐ)
+    suggestListEl.querySelectorAll('.suggest-item').forEach(el=>{
+      el.addEventListener('mousedown', e=>{
+        e.preventDefault();
+        suggestPointerDownOnItem = true;
+        const placeId = el.dataset.placeId;
+        const mainText = el.querySelector('.suggest-main').textContent;
+        handleSuggestionSelect(placeId, mainText);
+      });
+      el.addEventListener('touchstart', e=>{
+        suggestPointerDownOnItem = true;
+        const placeId = el.dataset.placeId;
+        const mainText = el.querySelector('.suggest-main').textContent;
+        handleSuggestionSelect(placeId, mainText);
+      }, { passive:true });
+    });
+  }
+
   if(titleInputEl && suggestListEl){
     titleInputEl.addEventListener('input', ()=>{
       clearTimeout(suggestDebounce);
       const q = titleInputEl.value.trim();
-      if(q.length < 2){ suggestListEl.classList.remove('open'); suggestListEl.innerHTML = ''; return; }
+      if(q.length < 2){ closeSuggestList(); return; }
       suggestDebounce = setTimeout(async ()=>{
         suggestListEl.classList.add('open');
-        suggestListEl.innerHTML = `<div class="suggest-loading"><div class="spinner"></div>候補を検索中…</div>`;
+        renderSuggestLoading('候補を検索中…');
         try{
           const suggestions = await PlacesRepository.autocomplete(q);
-          if(!suggestions.length){
-            suggestListEl.innerHTML = `<div class="suggest-loading">候補が見つかりませんでした</div>`;
-            return;
-          }
-          suggestListEl.innerHTML = suggestions.map(s=>`
-            <div class="suggest-item" data-place-id="${escapeAttr(s.placeId)}">
-              <div class="suggest-main">${s.mainText}</div>
-              ${s.secondaryText ? `<div class="suggest-sub">${s.secondaryText}</div>` : ''}
-            </div>
-          `).join('');
-          suggestListEl.querySelectorAll('.suggest-item').forEach(el=>{
-            el.addEventListener('click', async ()=>{
-              const placeId = el.dataset.placeId;
-              const mainText = el.querySelector('.suggest-main').textContent;
-              titleInputEl.value = mainText;
-              suggestListEl.innerHTML = `<div class="suggest-loading"><div class="spinner"></div>詳細を取得中…</div>`;
-              try{
-                const details2 = await PlacesRepository.getDetails(placeId);
-                const addrEl = document.getElementById('detailField_address');
-                const phoneEl = document.getElementById('detailField_phone');
-                const hoursEl = document.getElementById('detailField_hours');
-                const webEl = document.getElementById('detailField_website');
-                if(addrEl) addrEl.value = details2.address || '';
-                if(phoneEl) phoneEl.value = details2.phone || '';
-                if(hoursEl) hoursEl.value = details2.hours || '';
-                if(webEl) webEl.value = details2.website || '';
-                if(details2.rating){
-                  const d = state.itemDetails[id] || {};
-                  d.rating = details2.rating;
-                  state.itemDetails[id] = d;
-                }
-                suggestListEl.classList.remove('open');
-                suggestListEl.innerHTML = '';
-                showToast('候補から情報を入力しました');
-              }catch(err){
-                console.error('place details failed', err);
-                suggestListEl.classList.remove('open');
-                showToast('詳細情報の取得に失敗しました。住所などは手入力してください');
-              }
-            });
-          });
+          renderSuggestions(suggestions);
         }catch(err){
           console.error('autocomplete failed', err);
-          suggestListEl.innerHTML = `<div class="suggest-loading">検索に失敗しました。住所などは手入力してください</div>`;
-          showToast('候補の検索に失敗しました');
+          renderSuggestMessage('検索に失敗しました。住所などは手入力してください');
         }
       }, 350);
     });
     titleInputEl.addEventListener('blur', ()=>{
-      setTimeout(()=>{ suggestListEl.classList.remove('open'); }, 200);
+      setTimeout(()=>{
+        if(!suggestPointerDownOnItem) closeSuggestList();
+        suggestPointerDownOnItem = false;
+      }, 250);
     });
   }
 
