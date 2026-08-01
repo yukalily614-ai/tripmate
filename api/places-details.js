@@ -66,6 +66,8 @@ module.exports = async (req, res) => {
       hours: hoursList.join(' / '),
       website,
       rating,
+      lat: data.location ? data.location.latitude : null,
+      lng: data.location ? data.location.longitude : null,
     });
   } catch (err) {
     console.error(err);
