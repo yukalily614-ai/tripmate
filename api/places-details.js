@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
     'currentOpeningHours',
     'websiteUri',
     'rating',
+    'location'
   ].join(',');
 
   try {
