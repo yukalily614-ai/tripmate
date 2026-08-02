@@ -1314,7 +1314,9 @@ const PlacesRepository = {
     }
     const website = data.website || data.websiteUri || '';
     const rating = (typeof data.rating === 'number') ? data.rating : null;
-    return { address, phone, hours: hours || '', website, rating };
+    const lat = (typeof data.lat === 'number') ? data.lat : null;
+    const lng = (typeof data.lng === 'number') ? data.lng : null;
+    return { address, phone, hours: hours || '', website, rating, lat, lng };
   }
 };
 
@@ -1452,6 +1454,10 @@ function openDetail(id){
         const d = state.itemDetails[id] || {};
         d.rating = details2.rating;
         state.itemDetails[id] = d;
+      }
+      if(typeof details2.lat === 'number' && typeof details2.lng === 'number'){
+        item.lat = details2.lat;
+        item.lng = details2.lng;
       }
       closeSuggestList();
       const filledCount = [details2.address, details2.phone, details2.hours, details2.website].filter(Boolean).length;
