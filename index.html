@@ -686,11 +686,14 @@ class FirebaseStorageService{
   }
 }
 
+let firebaseStatus = 'unknown'; // 'connected' | 'local' | 'error'
+
 async function initStorageService(){
   const hasFirebaseConfig = FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith('YOUR_');
   if(!hasFirebaseConfig){
     console.warn('Firebase設定が未入力のため、端末内保存(localStorage)のみで動作します。2人で共有したい場合はFIREBASE_CONFIGを設定してください。');
     storageService = storageServiceLocal;
+    firebaseStatus = 'local';
     return;
   }
   try{
@@ -699,9 +702,12 @@ async function initStorageService(){
     const app = initializeApp(FIREBASE_CONFIG);
     const db = getFirestore(app);
     storageService = new FirebaseStorageService(db, { doc, getDoc, setDoc, deleteDoc, onSnapshot });
+    firebaseStatus = 'connected';
+    console.log('Firebaseに接続しました。データは端末間で共有されます。');
   }catch(err){
     console.error('Firebase初期化に失敗しました。localStorageにフォールバックします。', err);
     storageService = storageServiceLocal;
+    firebaseStatus = 'error';
   }
 }
 
