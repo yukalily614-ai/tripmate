@@ -1149,6 +1149,7 @@ function buildDetailHtml(item){
   const canEditTime = dt.time !== '終日';
   const images = details.images || [];
   const effQuery = getEffectiveMapQuery(item);
+  const pointsVal = (state.itemEdits[item.id] && state.itemEdits[item.id].points) || '';
 
   const pickerHtml = `<div class="cat-picker" id="detailCatPicker">
       ${CATEGORY_LIST.map(c=>`<button type="button" class="cat-opt" data-cat-pick="${item.id}" data-cat-key="${c.key}">${catIconHtml(c.key,26)}<span>${c.label}</span></button>`).join('')}
