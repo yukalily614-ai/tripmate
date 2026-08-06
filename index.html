@@ -1256,7 +1256,8 @@ function commitDetailEdits(id, item){
   if(titleEl){
     const titleVal = titleEl.value.trim();
     const noteEl = document.getElementById('detailEditNote');
-    state.itemEdits[id] = { title: titleVal || undefined, note: noteEl ? noteEl.value : '' };
+    const pointsEl = document.getElementById('detailEditPoints');
+    state.itemEdits[id] = { title: titleVal || undefined, note: noteEl ? noteEl.value : '', points: pointsEl ? pointsEl.value : '' };
   }
   const timeStartEl = document.getElementById('detailEditTime');
   if(timeStartEl){
