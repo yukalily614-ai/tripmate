@@ -1206,6 +1206,7 @@ function buildDetailHtml(item){
       <div class="detail-time-display">${dt.time || '時間未設定'}${dt.end ? '〜'+dt.end : ''}</div>
       <div class="detail-title-display">${dc.title}</div>
       ${dc.note ? `<div class="detail-note-display">${dc.note}</div>` : ''}
+      ${pointsVal ? `<div class="tip" style="margin-top:8px;">💡 <span>${pointsVal}</span></div>` : ''}
     </div>
     <div id="detailCoreEdit">
       ${canEditTime ? `<div class="detail-time-edit-row"><input type="time" class="time-input" id="detailEditTime" value="${toHM(dt.time)}"><span class="t-sep">–</span><input type="time" class="time-input" id="detailEditTimeEnd" value="${toHM(dt.end)}"></div>` : ''}
@@ -1214,6 +1215,7 @@ function buildDetailHtml(item){
         <div class="suggest-list" id="detailSuggestList"></div>
       </div>
       <textarea class="edit-note" id="detailEditNote" placeholder="メモ・詳細(JRなど)">${dc.note||''}</textarea>
+      <textarea class="edit-note" id="detailEditPoints" placeholder="📌 ポイント・アドバイス(注意点やコツなど)">${pointsVal}</textarea>
     </div>
     ${item.risk ? `<div class="risk">⚠ ${item.risk}</div>` : ''}
     ${item.tip ? `<div class="tip">💡 <span>${item.tip}</span></div>` : ''}
